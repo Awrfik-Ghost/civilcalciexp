@@ -1,6 +1,12 @@
 import streamlit as st
 from pandas import DataFrame
+from io import BytesIO
+from reportlab.lib.pagesizes import letter, landscape
+from reportlab.pdfgen import canvas
 import uuid
+import datetime
+
+ct = datetime.datetime.now()
 
 st.set_page_config(page_title="MS Weight Calculator", page_icon=":material/measuring_tape:", layout='wide',
                    initial_sidebar_state='collapsed')
@@ -35,6 +41,58 @@ def add_item():
 # Function to remove an item by its unique id
 def remove_item(item_id):
     st.session_state.add_items = [item for item in st.session_state.add_items if item["id"] != item_id]
+
+# Function to create PDF with enhanced column width for "Item Type"
+def create_pdf(dataframe):
+    buffer = BytesIO()
+    p = canvas.Canvas(buffer, pagesize=landscape(letter))
+    width, height = landscape(letter)
+
+    # Title
+    p.setFont("Helvetica-Bold", 14)
+    p.drawString(30, height - 40, "MS Weight Calculation Report")
+
+    # Set font for content
+    p.setFont("Helvetica", 10)
+
+    # Layout for columns
+    x_offset = 30
+    y_offset = height - 70
+    line_height = 20
+    max_cols = min(len(dataframe.columns), 8)  # Fit up to 8 columns
+
+    # Adjusted column widths
+    item_type_col_width = 1.5 * ((width - 2 * x_offset) / max_cols)  # 50% wider for "Item Type"
+    other_col_width = (width - 2 * x_offset - item_type_col_width) / (max_cols - 1)  # Remaining columns
+
+    # Header
+    for i, col in enumerate(dataframe.columns[:max_cols]):
+        if col == "Item Type":
+            p.drawString(x_offset, y_offset, str(col))
+            x_offset += item_type_col_width  # Move x_offset for wider "Item Type" column
+        else:
+            p.drawString(x_offset, y_offset, str(col))
+            x_offset += other_col_width
+    y_offset -= line_height
+
+    # Reset x_offset for data rows
+    x_offset = 30
+
+    # Rows
+    for _, row in dataframe.iterrows():
+        for i, col in enumerate(dataframe.columns[:max_cols]):
+            if col == "Item Type":
+                p.drawString(x_offset, y_offset, str(row[col]))
+                x_offset += item_type_col_width
+            else:
+                p.drawString(x_offset, y_offset, str(row[col]))
+                x_offset += other_col_width
+        y_offset -= line_height
+        x_offset = 30  # Reset for the next row
+
+    p.save()
+    buffer.seek(0)
+    return buffer
 
 item_types = ['Rectangular Hollow Section', 'Circular Hollow Section', 'Round Steel Bars', 'Flat Bars', 'Square Steel Bars']
 
@@ -140,3 +198,12 @@ total_sum = round(total_sum, 2)
 st.subheader("MS Steel Calculation Details")
 st.dataframe(df)
 st.success(f"Total Weight of all items: **{total_sum} kg**")
+
+# Button to generate and download PDF
+pdf_buffer = create_pdf(df)
+st.download_button(
+    label="Download PDF",
+    data=pdf_buffer,
+    file_name=f"ms_weight_report_{ct}.pdf",
+    mime="application/pdf"
+)
