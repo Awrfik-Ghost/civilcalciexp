@@ -16,6 +16,7 @@ st.title("📏 MS Weight Calculator")
 
 total_sum = 0
 
+
 # Define default item values with a unique id
 def create_item():
     return {
